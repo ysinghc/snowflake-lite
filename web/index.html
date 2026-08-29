@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>snowflake-lite</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --bg-soft: #121a30;
+    --card: #131c33;
+    --card-2: #0f1730;
+    --border: #243357;
+    --text: #e6ecf7;
+    --muted: #92a2c4;
+    --faint: #5f7099;
+    --accent: #4f8cff;
+    --accent-ink: #ffffff;
+    --ts: #38bdf8;   /* timestamp field */
+    --mc: #f59e0b;   /* machine field   */
+    --sq: #34d399;   /* sequence field  */
+    --unused: #46587f;
+    --ok: #34d399;
+    --err: #fb7185;
+    --shadow: 0 12px 40px rgba(0,0,0,.45);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #eef2fb; --bg-soft: #e4eaf7; --card: #ffffff; --card-2: #f5f8ff;
+      --border: #d3ddf0; --text: #10182b; --muted: #566a92;
+      --faint: #8494b5; --unused: #b3c0da; --shadow: 0 10px 30px rgba(31,49,92,.12);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 600px at 82% -8%, rgba(79,140,255,.16), transparent 60%),
+      radial-gradient(900px 520px at 8% 4%, rgba(52,211,153,.10), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 20px 64px; }
+
+  /* ---- header ---- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 28px;
+  }
+  .brand { display: flex; align-items: center; gap: 16px; }
+  .logo {
+    width: 52px; height: 52px; flex: none; border-radius: 14px;
+    display: grid; place-items: center; font-size: 28px;
+    background: linear-gradient(155deg, rgba(79,140,255,.25), rgba(52,211,153,.18));
+    border: 1px solid var(--border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  h1 { margin: 0; font-size: 1.5rem; letter-spacing: -.02em; }
+  .sub { margin: 2px 0 0; color: var(--muted); font-size: .92rem; max-width: 46ch; }
+
+  .status {
+    font-family: var(--mono); font-size: .8rem; padding: 7px 12px;
+    border-radius: 999px; border: 1px solid var(--border);
+    background: var(--card-2); color: var(--muted); white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .status.ready .dot { background: var(--ok); box-shadow: 0 0 0 4px rgba(52,211,153,.18); }
+  .status.error .dot { background: var(--err); box-shadow: 0 0 0 4px rgba(251,113,133,.18); }
+
+  /* ---- cards ---- */
+  .card {
+    background: linear-gradient(180deg, var(--card), var(--card-2));
+    border: 1px solid var(--border); border-radius: 16px;
+    padding: 22px; margin-bottom: 20px; box-shadow: var(--shadow);
+  }
+  .card h2 {
+    margin: 0 0 4px; font-size: 1.02rem; letter-spacing: -.01em;
+    display: flex; align-items: center; gap: 9px;
+  }
+  .card h2 .n {
+    font-family: var(--mono); font-size: .72rem; color: var(--accent);
+    border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px;
+    background: var(--card-2);
+  }
+  .hint { color: var(--muted); font-size: .86rem; margin: 0 0 16px; }
+
+  /* ---- controls ---- */
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  label.fld { font-size: .82rem; color: var(--muted); display: inline-flex; flex-direction: column; gap: 5px; }
+  input[type=text], input[type=number] {
+    font-family: var(--mono); font-size: .95rem; color: var(--text);
+    background: var(--bg-soft); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px; outline: none; width: 100%;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,140,255,.22); }
+  input.bad { border-color: var(--err); box-shadow: 0 0 0 3px rgba(251,113,133,.2); }
+  .w-machine { width: 108px; }
+  .w-id { flex: 1 1 260px; min-width: 220px; }
+
+  button {
+    font-family: var(--sans); font-size: .92rem; font-weight: 600;
+    color: var(--text); background: var(--bg-soft);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 16px; cursor: pointer; transition: transform .05s, border-color .15s, background .15s;
+  }
+  button:hover { border-color: var(--accent); }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary {
+    background: linear-gradient(180deg, #5b95ff, var(--accent));
+    color: var(--accent-ink); border-color: transparent;
+    box-shadow: 0 6px 18px rgba(79,140,255,.35);
+  }
+  button.primary:hover { filter: brightness(1.06); }
+
+  /* ---- generated id ---- */
+  .idbox {
+    margin-top: 18px; background: var(--bg-soft); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 18px; display: flex; align-items: center;
+    justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  }
+  .idval {
+    font-family: var(--mono); font-size: clamp(1.1rem, 4.4vw, 1.9rem);
+    font-weight: 600; letter-spacing: -.01em; word-break: break-all; line-height: 1.15;
+  }
+  .copy { font-size: .78rem; padding: 8px 12px; white-space: nowrap; }
+  .copy.done { color: var(--ok); border-color: var(--ok); }
+
+  /* ---- bit visualizer ---- */
+  .bits-scroll { overflow-x: auto; padding-bottom: 6px; margin: 4px -4px 0; }
+  .bits { display: flex; gap: 10px; padding: 4px; width: max-content; margin: 0 auto; }
+  .grp { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .cells { display: flex; gap: 3px; }
+  .bit {
+    width: 17px; height: 24px; border-radius: 4px; font-family: var(--mono);
+    font-size: .72rem; display: grid; place-items: center;
+    background: var(--card-2); border: 1px solid var(--border); color: var(--faint);
+    transition: background .2s, color .2s, border-color .2s;
+  }
+  .bit.on { color: var(--text); font-weight: 600; }
+  .grp.ts .bit.on { background: rgba(56,189,248,.22); border-color: var(--ts); color: #bfe6ff; }
+  .grp.mc .bit.on { background: rgba(245,158,11,.22); border-color: var(--mc); color: #ffe0a3; }
+  .grp.sq .bit.on { background: rgba(52,211,153,.22); border-color: var(--sq); color: #b6f2da; }
+  .grp.unused .bit { opacity: .6; }
+  .grplabel { font-size: .68rem; font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+  .grp.ts .grplabel { color: var(--ts); }
+  .grp.mc .grplabel { color: var(--mc); }
+  .grp.sq .grplabel { color: var(--sq); }
+
+  /* ---- decoded fields ---- */
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 20px; }
+  .field { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .field .k { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .field .v { font-family: var(--mono); font-size: .98rem; margin-top: 4px; word-break: break-all; }
+  .field.ts { border-left: 3px solid var(--ts); }
+  .field.mc { border-left: 3px solid var(--mc); }
+  .field.sq { border-left: 3px solid var(--sq); }
+
+  /* ---- bench results ---- */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-top: 18px; }
+  .stat { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .stat .big { font-family: var(--mono); font-size: 1.5rem; font-weight: 700; letter-spacing: -.02em; }
+  .stat .lbl { font-size: .74rem; color: var(--muted); margin-top: 2px; }
+  .stat .big.rate { color: var(--accent); }
+  .stat .big.ok { color: var(--ok); }
+  .msg { font-size: .84rem; color: var(--muted); margin-top: 12px; min-height: 1.1em; }
+  .msg.err { color: var(--err); }
+
+  footer { color: var(--faint); font-size: .82rem; text-align: center; margin-top: 34px; line-height: 1.8; }
+  footer code { font-family: var(--mono); color: var(--muted); }
+  .legend { display: inline-flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-bottom: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo">❄</div>
+      <div>
+        <h1>snowflake-lite</h1>
+        <p class="sub">Lock-free, time-sortable 64-bit IDs — the real Go generator, compiled to WebAssembly and running right here in your browser.</p>
+      </div>
+    </div>
+    <div class="status" id="status"><span class="dot"></span><span id="statusText">initializing…</span></div>
+  </header>
+
+  <!-- 1. Generate -->
+  <section class="card">
+    <h2><span class="n">01</span> Generate</h2>
+    <p class="hint">Each call mints one unique, monotonically increasing ID — no lock, no coordination, never blocks.</p>
+    <div class="row">
+      <label class="fld">machine&nbsp;ID
+        <input type="number" id="machine" class="w-machine" min="0" max="1023" value="1" title="0–1023">
+      </label>
+      <label class="fld">&nbsp;
+        <button id="setMachine">Set machine</button>
+      </label>
+      <label class="fld">&nbsp;
+        <button id="gen" class="primary">Generate ID →</button>
+      </label>
+    </div>
+    <div class="idbox">
+      <div class="idval" id="idval">—</div>
+      <button class="copy" id="copy" title="Copy to clipboard">copy</button>
+    </div>
+    <div class="msg" id="genMsg"></div>
+  </section>
+
+  <!-- 2. Anatomy -->
+  <section class="card">
+    <h2><span class="n">02</span> Anatomy of an ID</h2>
+    <p class="hint">63 usable bits: a 41-bit millisecond timestamp, a 10-bit machine ID, and a 12-bit per-millisecond sequence. Paste any ID to inspect it, or generate one above.</p>
+    <div class="row" style="margin-bottom:6px">
+      <input type="text" id="decodeIn" class="w-id" placeholder="paste a snowflake ID…" inputmode="numeric">
+      <button id="decodeBtn">Decode</button>
+    </div>
+    <div class="bits-scroll"><div class="bits" id="bits"></div></div>
+    <div class="fields" id="fields"></div>
+    <div class="msg" id="decodeMsg"></div>
+  </section>
+
+  <!-- 3. Benchmark -->
+  <section class="card">
+    <h2><span class="n">03</span> Benchmark</h2>
+    <p class="hint">Run the real generation loop <em>inside the browser</em> and measure throughput. A strictly-ascending result is, by definition, both sortable and collision-free.</p>
+    <div class="row">
+      <label class="fld">count
+        <input type="number" id="benchN" class="w-machine" style="width:150px" min="1" max="50000000" value="1000000">
+      </label>
+      <label class="fld">&nbsp;
+        <button id="benchBtn" class="primary">Run benchmark</button>
+      </label>
+    </div>
+    <div class="stats" id="stats" hidden>
+      <div class="stat"><div class="big rate" id="sRate">—</div><div class="lbl">IDs / second</div></div>
+      <div class="stat"><div class="big" id="sElapsed">—</div><div class="lbl">elapsed (ms)</div></div>
+      <div class="stat"><div class="big" id="sCount">—</div><div class="lbl">generated</div></div>
+      <div class="stat"><div class="big ok" id="sMono">—</div><div class="lbl">strictly ascending</div></div>
+    </div>
+    <div class="msg" id="benchMsg"></div>
+  </section>
+
+  <footer>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ts)"></i>41-bit timestamp</span>
+      <span><i class="swatch" style="background:var(--mc)"></i>10-bit machine</span>
+      <span><i class="swatch" style="background:var(--sq)"></i>12-bit sequence</span>
+      <span><i class="swatch" style="background:var(--unused)"></i>1 unused (sign) bit</span>
+    </div>
+    The same <code>snowflake</code> Go package powers the CLI (<code>go run ./cmd/snowflake</code>) and this page.<br>
+    Rebuild the module with <code>GOOS=js GOARCH=wasm go build -o web/snowflake.wasm ./wasm</code>.
+  </footer>
+</div>
+
+<script src="wasm_exec.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const nf = new Intl.NumberFormat("en-US");
+  let ready = false;
+
+  // Field layout across the 64-bit word (MSB first): matches the Go package.
+  const LAYOUT = [
+    { cls: "unused", start: 0,  len: 1,  label: "unused" },
+    { cls: "ts",     start: 1,  len: 41, label: "timestamp · 41" },
+    { cls: "mc",     start: 42, len: 10, label: "machine · 10" },
+    { cls: "sq",     start: 52, len: 12, label: "sequence · 12" },
+  ];
+
+  function setStatus(state, text) {
+    const el = $("status");
+    el.className = "status" + (state ? " " + state : "");
+    $("statusText").textContent = text;
+  }
+
+  function setMsg(id, text, isErr) {
+    const el = $(id);
+    el.textContent = text || "";
+    el.className = "msg" + (isErr ? " err" : "");
+  }
+
+  // ---- WASM boot: define the handshake BEFORE running main() ----
+  window.onSnowReady = function () {
+    ready = true;
+    setStatus("ready", "WASM ready");
+    ["setMachine", "gen", "decodeBtn", "benchBtn"].forEach((id) => ($(id).disabled = false));
+    generate(); // show a live ID immediately
+  };
+
+  async function boot() {
+    ["setMachine", "gen", "decodeBtn", "benchBtn"].forEach((id) => ($(id).disabled = true));
+    try {
+      const go = new Go();
+      const resp = await fetch("snowflake.wasm");
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      // Use arrayBuffer (not instantiateStreaming) so a missing
+      // application/wasm MIME type on a plain static server still works.
+      const bytes = await resp.arrayBuffer();
+      const result = await WebAssembly.instantiate(bytes, go.importObject);
+      go.run(result.instance); // runs main(); invokes onSnowReady, then blocks
+    } catch (err) {
+      setStatus("error", "load failed");
+      setMsg("genMsg", "Could not load snowflake.wasm: " + err.message +
+        ". Serve this folder over HTTP (e.g. `python3 -m http.server` in web/), not file://.", true);
+    }
+  }
+
+  // ---- 01 Generate ----
+  function generate() {
+    if (!ready) return;
+    const id = snowNext();
+    $("idval").textContent = id;
+    $("decodeIn").value = id;
+    setMsg("genMsg", "");
+    renderDecode(id);
+  }
+
+  function setMachine() {
+    if (!ready) return;
+    const input = $("machine");
+    const m = parseInt(input.value, 10);
+    const res = snowNew(isNaN(m) ? -1 : m);
+    if (res && res.error) {
+      input.classList.add("bad");
+      setMsg("genMsg", "machine ID must be 0–1023 (" + res.error + ")", true);
+      return;
+    }
+    input.classList.remove("bad");
+    setMsg("genMsg", "machine ID set to " + m + " — new IDs will carry it.");
+  }
+
+  // ---- 02 Anatomy / decode ----
+  function renderDecode(idStr) {
+    const d = snowDecode(String(idStr));
+    if (d && d.error) {
+      $("decodeIn").classList.add("bad");
+      setMsg("decodeMsg", "invalid ID: " + d.error, true);
+      return;
+    }
+    $("decodeIn").classList.remove("bad");
+    setMsg("decodeMsg", "");
+    renderBits(d.bits);
+    renderFields(d);
+  }
+
+  function renderBits(bits) {
+    const host = $("bits");
+    host.innerHTML = "";
+    for (const f of LAYOUT) {
+      const grp = document.createElement("div");
+      grp.className = "grp " + f.cls;
+      const cells = document.createElement("div");
+      cells.className = "cells";
+      for (let i = f.start; i < f.start + f.len; i++) {
+        const b = document.createElement("div");
+        const on = bits[i] === "1";
+        b.className = "bit" + (on ? " on" : "");
+        b.textContent = bits[i];
+        cells.appendChild(b);
+      }
+      const lbl = document.createElement("div");
+      lbl.className = "grplabel";
+      lbl.textContent = f.label;
+      grp.appendChild(cells);
+      grp.appendChild(lbl);
+      host.appendChild(grp);
+    }
+  }
+
+  function renderFields(d) {
+    const rows = [
+      { cls: "ts", k: "timestamp (UTC)", v: d.timestamp },
+      { cls: "ts", k: "ms since epoch",  v: nf.format(d.millisSinceEpoch) },
+      { cls: "mc", k: "machine ID",      v: d.machineID },
+      { cls: "sq", k: "sequence",        v: d.sequence },
+    ];
+    $("fields").innerHTML = rows.map((r) =>
+      '<div class="field ' + r.cls + '"><div class="k">' + r.k +
+      '</div><div class="v">' + r.v + "</div></div>"
+    ).join("");
+  }
+
+  // ---- 03 Benchmark ----
+  function runBench() {
+    if (!ready) return;
+    const n = Math.max(1, parseInt($("benchN").value, 10) || 1000000);
+    const btn = $("benchBtn");
+    btn.disabled = true;
+    btn.textContent = "running…";
+    setMsg("benchMsg", "generating " + nf.format(n) + " IDs on the main thread…");
+    // Defer so the "running…" state paints before the synchronous WASM loop.
+    setTimeout(() => {
+      const r = snowBench(n);
+      $("stats").hidden = false;
+      $("sRate").textContent = nf.format(Math.round(r.rate));
+      $("sElapsed").textContent = r.elapsedMs.toFixed(1);
+      $("sCount").textContent = nf.format(r.count);
+      $("sMono").textContent = r.monotonic ? "✓ yes" : "✗ no";
+      $("sMono").className = "big " + (r.monotonic ? "ok" : "");
+      setMsg("benchMsg", "last ID: " + r.lastID);
+      btn.disabled = false;
+      btn.textContent = "Run benchmark";
+    }, 25);
+  }
+
+  // ---- copy ----
+  async function copyId() {
+    const val = $("idval").textContent;
+    if (!val || val === "—") return;
+    try { await navigator.clipboard.writeText(val); } catch (_) {}
+    const btn = $("copy");
+    btn.textContent = "copied ✓";
+    btn.classList.add("done");
+    setTimeout(() => { btn.textContent = "copy"; btn.classList.remove("done"); }, 1200);
+  }
+
+  // ---- wiring ----
+  $("gen").addEventListener("click", generate);
+  $("setMachine").addEventListener("click", setMachine);
+  $("machine").addEventListener("keydown", (e) => { if (e.key === "Enter") setMachine(); });
+  $("copy").addEventListener("click", copyId);
+  $("decodeBtn").addEventListener("click", () => renderDecode($("decodeIn").value.trim()));
+  $("decodeIn").addEventListener("keydown", (e) => { if (e.key === "Enter") renderDecode($("decodeIn").value.trim()); });
+  $("benchBtn").addEventListener("click", runBench);
+
+  setStatus("", "loading WASM…");
+  boot();
+})();
+</script>
+</body>
+</html>
