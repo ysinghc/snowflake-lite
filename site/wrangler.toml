@@ -8,3 +8,8 @@ GITHUB_REPO = "ysinghc/snowflake-lite"
 [[routes]]
 pattern = "snowflake.ysinghc.in"
 custom_domain = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true

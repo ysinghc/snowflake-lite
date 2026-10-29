@@ -2,3 +2,5 @@
 /snowflake/snowflake
 node_modules/
 .wrangler/
+/site/public/snowflake.wasm
+/site/public/wasm_exec.js
