@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ysinghc/snowflake-lite/saas"
 	"github.com/ysinghc/snowflake-lite/snowflake"
 )
 
@@ -56,6 +57,43 @@ func main() {
 			fatal(err)
 		}
 		cmdServe(gen, *addr)
+	case "serve-saas":
+		fs := flag.NewFlagSet("serve-saas", flag.ExitOnError)
+		machine := fs.Uint64("machine", 0, "machine ID (0-1023)")
+		datacenter := fs.Uint64("datacenter", 0, "datacenter ID (0-31)")
+		addr := fs.String("addr", ":8080", "listen address")
+		webDir := fs.String("web", "web", "directory containing web dashboard")
+		_ = fs.Parse(os.Args[2:])
+
+		// StatefulSet Kubernetes ordinal resolution (e.g. snowflake-worker-2 => machineID = 2)
+		mID := *machine
+		podName := os.Getenv("POD_NAME")
+		if podName == "" {
+			podName, _ = os.Hostname()
+		}
+		if podName != "" && mID == 0 {
+			parts := strings.Split(podName, "-")
+			if len(parts) > 1 {
+				if val, err := strconv.ParseUint(parts[len(parts)-1], 10, 64); err == nil {
+					mID = val
+				}
+			}
+		}
+
+		srv, err := saas.NewServer(saas.ServerConfig{
+			Addr:         *addr,
+			DatacenterID: *datacenter,
+			MachineID:    mID,
+			PodName:      podName,
+			WebDir:       *webDir,
+			CustomConfig: saas.DefaultCustomBitConfig(),
+		})
+		if err != nil {
+			fatal(err)
+		}
+		if err := srv.ListenAndServe(); err != nil {
+			fatal(err)
+		}
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -272,15 +310,17 @@ Usage:
   snowflake bench    [N]   measure generation throughput
   snowflake decode   <ID>  split an ID into its fields
   snowflake serve          serve IDs over HTTP (--addr :8080)
+  snowflake serve-saas     serve Enterprise & Developer SaaS Platform over HTTP (--addr :8080)
 
 Flags (place before the count):
-  --machine ID   machine ID 0-1023; default $MACHINE_ID, else hostname hash
+  --machine ID   machine ID 0-1023; default $MACHINE_ID or pod ordinal index
+  --datacenter ID datacenter ID 0-31
   --addr   ADDR  listen address for serve (default :8080)
 
 Examples:
   time ./snowflake generate 1000000
   ./snowflake bench 5000000
-  ./snowflake --machine 7 generate 1000000   # (via: snowflake generate --machine 7 1000000)
+  ./snowflake serve-saas --addr :8080
   ./snowflake decode 123456789012345678
 `)
 }
