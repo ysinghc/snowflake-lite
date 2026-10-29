@@ -1,0 +1,10 @@
+name = "snowflake-lite-site"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+GITHUB_REPO = "ysinghc/snowflake-lite"
+
+[[routes]]
+pattern = "snowflake.ysinghc.ion"
+custom_domain = true
