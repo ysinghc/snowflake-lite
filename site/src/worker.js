@@ -1,24 +1,36 @@
 // Serves the static site from the assets binding and fills in release data from GitHub.
-// Elements marked data-rel="tag|date|stars|notes" are rewritten on the way out, and
+// Elements marked data-rel="tag|date|notes" are rewritten on the way out, and
 // /api/release(s) expose the same data as JSON. Lookups are edge-cached for 5 minutes,
 // so tagging a new release updates every page without a redeploy.
 
 const TTL = 300;
 const MODULE = "github.com/ysinghc/snowflake-lite";
 
-async function gh(repo, path, ctx) {
-  const url = `https://api.github.com/repos/${repo}${path}`;
+// Release data comes from the repository's public Atom feed rather than the REST API:
+// unauthenticated API calls from shared edge IPs hit GitHub's 60-per-hour limit, while the
+// feed does not. A fresh copy lives for TTL seconds; a day-long stale copy covers outages.
+async function releases(repo, ctx) {
+  const url = `https://github.com/${repo}/releases.atom`;
   const cache = caches.default;
-  const key = new Request(url);
-  let res = await cache.match(key);
-  if (!res) {
-    res = await fetch(url, { headers: { "user-agent": "snowflake-lite-site", accept: "application/vnd.github+json" } });
-    if (!res.ok) return null;
-    res = new Response(res.body, res);
-    res.headers.set("cache-control", `public, max-age=${TTL}`);
-    ctx.waitUntil(cache.put(key, res.clone()));
+  const fresh = new Request(url);
+  const stale = new Request(url + "#stale");
+  let xml = await cache.match(fresh).then((r) => r && r.text());
+  if (xml === null || xml === undefined) {
+    const res = await fetch(url, { headers: { "user-agent": "snowflake-lite-site" } }).catch(() => null);
+    if (res && res.ok) {
+      xml = await res.text();
+      const mk = (age) => new Response(xml, { headers: { "cache-control": `public, max-age=${age}` } });
+      ctx.waitUntil(Promise.all([cache.put(fresh, mk(TTL)), cache.put(stale, mk(86400))]));
+    } else {
+      xml = await cache.match(stale).then((r) => (r ? r.text() : ""));
+    }
   }
-  return res.json();
+  return [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map((m) => {
+    const link = m[1].match(/<link[^>]*href="([^"]+)"/);
+    const updated = m[1].match(/<updated>([^<]+)</);
+    const tag = link ? decodeURIComponent(link[1].split("/tag/")[1] || "") : "";
+    return { tag, date: updated ? day(updated[1]) : "", url: link ? link[1] : "", prerelease: tag.includes("-") };
+  }).filter((r) => r.tag);
 }
 
 const day = (iso) => new Date(iso).toISOString().slice(0, 10);
@@ -28,12 +40,11 @@ const json = (data) =>
   });
 
 async function releaseInfo(repo, ctx) {
-  const [rel, meta] = await Promise.all([gh(repo, "/releases/latest", ctx), gh(repo, "", ctx)]);
+  const rel = (await releases(repo, ctx)).find((r) => !r.prerelease);
   return {
-    tag: rel ? rel.tag_name : "latest",
-    date: rel ? day(rel.published_at) : "",
-    url: rel ? rel.html_url : `https://github.com/${repo}/releases`,
-    stars: meta ? meta.stargazers_count : null,
+    tag: rel ? rel.tag : "latest",
+    date: rel ? rel.date : "",
+    url: rel ? rel.url : `https://github.com/${repo}/releases`,
   };
 }
 
@@ -45,7 +56,6 @@ function rewrite(res, info) {
         if (kind === "notes") el.setAttribute("href", info.url);
         else if (kind === "tag") el.setInnerContent(info.tag);
         else if (kind === "date" && info.date) el.setInnerContent(info.date);
-        else if (kind === "stars" && info.stars !== null) el.setInnerContent(String(info.stars));
       },
     })
     .transform(res);
@@ -57,10 +67,7 @@ export default {
     const repo = env.GITHUB_REPO;
 
     if (pathname === "/api/release") return json(await releaseInfo(repo, ctx));
-    if (pathname === "/api/releases") {
-      const list = (await gh(repo, "/releases?per_page=20", ctx)) || [];
-      return json(list.filter((r) => !r.draft).map((r) => ({ tag: r.tag_name, date: day(r.published_at), url: r.html_url, prerelease: r.prerelease })));
-    }
+    if (pathname === "/api/releases") return json((await releases(repo, ctx)).slice(0, 20));
 
     const res = await env.ASSETS.fetch(request);
     if (!(res.headers.get("content-type") || "").includes("text/html")) return res;
