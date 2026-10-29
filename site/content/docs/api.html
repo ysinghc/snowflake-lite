@@ -1,0 +1,64 @@
+<!--{"title":"API reference","lead":"Every exported symbol in package snowflake. The same information, with source links, is on pkg.go.dev."}-->
+<h2>Constants</h2>
+<table>
+<tr><th>Name</th><th>Value</th><th>Meaning</th></tr>
+<tr><td><code>Epoch</code></td><td><code>1704067200000</code></td><td>Timestamp origin: 2024-01-01T00:00:00Z in Unix milliseconds</td></tr>
+<tr><td><code>MaxMachineID</code></td><td><code>1023</code></td><td>Largest valid machine ID</td></tr>
+<tr><td><code>MaxSequence</code></td><td><code>4095</code></td><td>Largest sequence number within a millisecond</td></tr>
+</table>
+
+<h2>Generator</h2>
+<p>Mints IDs for one machine. The zero value is not usable; construct it with <code>New</code>, <code>MustNew</code> or <code>NewFromEnv</code>. All methods are safe for concurrent use.</p>
+
+<h3><code>New(machineID int64) (*Generator, error)</code></h3>
+<p>Returns a generator for <code>machineID</code>. Returns an error if the value is outside 0..1023.</p>
+
+<h3><code>MustNew(machineID int64) *Generator</code></h3>
+<p>Like <code>New</code> but panics on an invalid ID. Intended for program start-up with a constant.</p>
+
+<h3><code>NewFromEnv() (*Generator, error)</code></h3>
+<p>Reads the <code>MACHINE_ID</code> environment variable. If it is unset, the machine ID is the FNV-1a hash of the hostname modulo 1024. A malformed or out-of-range <code>MACHINE_ID</code> returns an error. See <a href="/docs/getting-started/#choose-machine-ids">choose machine IDs</a> for the collision risk of the fallback.</p>
+
+<h3><code>(*Generator) Next() ID</code></h3>
+<p>Returns the next unique, strictly ascending ID. It never blocks and never fails.</p>
+
+<h3><code>(*Generator) NextN(n int) []ID</code></h3>
+<p>Returns <code>n</code> IDs by calling <code>Next</code> in a loop. The slice is allocated once. IDs are ascending, but if other goroutines share the generator they may be interleaved with yours.</p>
+
+<h3><code>(*Generator) MachineID() int64</code></h3>
+<p>Reports the machine ID embedded in every ID this generator mints.</p>
+
+<h2>ID</h2>
+<p><code>type ID int64</code>. Always non-negative when produced by a generator.</p>
+<table>
+<tr><th>Method</th><th>Returns</th></tr>
+<tr><td><code>Int64() int64</code></td><td>The raw integer value</td></tr>
+<tr><td><code>String() string</code></td><td>Base-10 text. Use this on the wire</td></tr>
+<tr><td><code>Time() time.Time</code></td><td>The UTC instant encoded in the ID</td></tr>
+<tr><td><code>Decode() Parts</code></td><td>All fields; same as <code>Decode(id)</code></td></tr>
+</table>
+
+<h2>Decode and Parts</h2>
+<h3><code>Decode(id ID) Parts</code></h3>
+<p>Splits an ID into its fields. It does not validate: any integer decodes to something.</p>
+<pre><code>type Parts struct {
+	ID               ID        `json:"-"`
+	Timestamp        time.Time `json:"timestamp"`
+	MillisSinceEpoch uint64    `json:"millisSinceEpoch"`
+	MachineID        uint64    `json:"machineID"`
+	Sequence         uint64    `json:"sequence"`
+}</code></pre>
+
+<h2>Examples</h2>
+<h3>A shared generator</h3>
+<pre><code>var gen = snowflake.MustNew(mustEnvInt("MACHINE_ID"))
+
+func newOrderID() string { return gen.Next().String() }</code></pre>
+<h3>Check ordering</h3>
+<pre><code>a, b := gen.Next(), gen.Next()
+fmt.Println(b &gt; a)                     // true
+fmt.Println(a.Decode().MachineID)       // the generator's machine ID</code></pre>
+<h3>Mint a batch</h3>
+<pre><code>for _, id := range gen.NextN(1000) {
+	insert(id.Int64())
+}</code></pre>

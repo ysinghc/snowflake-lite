@@ -4,3 +4,10 @@ node_modules/
 .wrangler/
 /site/public/snowflake.wasm
 /site/public/wasm_exec.js
+/site/public/funcmap.json
+/site/public/index.html
+/site/public/404.html
+/site/public/docs/
+/site/public/download/
+/site/public/community/
+/site/public/security/

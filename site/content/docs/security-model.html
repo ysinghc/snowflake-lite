@@ -1,0 +1,53 @@
+<!--{"title":"Security model","lead":"How the platform authenticates callers, limits traffic and blocks abuse, and a plain list of what must change before it faces the internet.","desc":"Authentication, rate limiting, abuse protection and known limitations of the snowflake-lite platform server."}-->
+<h2>Components</h2>
+<p>All security state lives in one object, <code>SecurityManager</code>, guarded by a single read-write mutex. It holds four things:</p>
+<table>
+<tr><th>State</th><th>Purpose</th></tr>
+<tr><td>API keys</td><td>SHA-256 hash → tenant, tier, rate limit, permissions</td></tr>
+<tr><td>Blocklist</td><td>IP → expiry time. Expired entries are removed when next checked</td></tr>
+<tr><td>Rate limiters</td><td>One token bucket per key or IP</td></tr>
+<tr><td>Audit log</td><td>The last 1,000 events in a ring (oldest dropped)</td></tr>
+</table>
+
+<h2>API keys</h2>
+<ul>
+<li>A key looks like <code>sk_live_&lt;tier&gt;_&lt;16 hex characters&gt;</code>.</li>
+<li>Only the SHA-256 hash is stored. Lookup hashes the presented key and reads the map, then compares the hashes in constant time.</li>
+<li>Each key records a tenant, a tier, a rate limit and a permission list (<code>ids:read</code>, <code>ids:batch</code>, <code>admin:all</code>).</li>
+</ul>
+
+<h2>Rate limiting</h2>
+<p>Each caller gets a token bucket whose capacity and refill rate both equal its limit in requests per second. A request takes one token. When the bucket is empty the server replies <code>429</code> and tells the caller how long to wait. The identity is the key hash for authenticated calls and the client IP for anonymous ones.</p>
+
+<h2>Abuse protection</h2>
+<p>Before the bucket, the server records each request's time against its IP and keeps ten seconds of history. If an IP sends more than 500 requests in ten seconds while its limit is 100 or less (anonymous or <code>free</code>), it is blocked for 15 minutes and the event is logged as <code>ABUSE_AUTO_BLOCK</code>. Denied requests count too, so hammering an exhausted bucket trips the block.</p>
+
+<h2>Audit events</h2>
+<table>
+<tr><th>Event</th><th>When</th></tr>
+<tr><td><code>API_KEY_CREATED</code></td><td>A key is issued</td></tr>
+<tr><td><code>AUTH_FAILED</code></td><td>A request presents an unknown key</td></tr>
+<tr><td><code>RATE_LIMIT_EXCEEDED</code></td><td>A bucket is empty</td></tr>
+<tr><td><code>ABUSE_AUTO_BLOCK</code></td><td>The velocity check blocks an IP</td></tr>
+<tr><td><code>IP_BLOCKED</code>, <code>IP_UNBLOCKED</code></td><td>An administrator changes the blocklist</td></tr>
+<tr><td><code>CLUSTER_REBALANCED</code></td><td>The rebalance route is called</td></tr>
+</table>
+
+<h2>Known limitations</h2>
+<p>These are properties of the current code, listed so you can decide whether it fits your environment. Contributions that address them are welcome; see <a href="/community/">Community</a>.</p>
+<div class="callout warn"><strong>Before a public deployment</strong><p>Treat the platform server as a trusted-network service until the items below are resolved.</p></div>
+<table>
+<tr><th>Area</th><th>Current behavior</th></tr>
+<tr><td>Admin routes</td><td><code>/api/v1/admin/*</code> require no credentials. Anyone who can reach them can read metrics and audit logs, block or unblock IPs, and trigger the rebalance simulation</td></tr>
+<tr><td>Key issuance</td><td><code>POST /api/v1/auth/keys</code> is open, and the caller picks the tier, including <code>enterprise</code></td></tr>
+<tr><td>Permissions</td><td>Permission lists are stored but not checked. The generate routes accept any valid key</td></tr>
+<tr><td>Client IP</td><td>The first value of <code>X-Forwarded-For</code> is trusted without checking the proxy, so a direct caller can spoof it to evade IP limits and blocks</td></tr>
+<tr><td>Key randomness</td><td>Key material comes from <code>math/rand</code>, which is not cryptographically secure</td></tr>
+<tr><td>Shared state</td><td>Keys, buckets and the blocklist are in memory per process. With several pods, a key created on one is unknown to the others, and limits apply per pod</td></tr>
+<tr><td>Memory growth</td><td>Per-IP and per-key limiter entries are never evicted</td></tr>
+<tr><td>CORS</td><td>Any origin is allowed on every route, including admin</td></tr>
+<tr><td>TLS</td><td>None. Terminate TLS at an ingress or proxy</td></tr>
+</table>
+
+<h2>The core library</h2>
+<p>None of the above affects the <code>snowflake</code> package. It has no network code, no global state and no dependencies. See <a href="/security/">Security</a> for how to report a vulnerability.</p>

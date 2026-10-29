@@ -1,0 +1,45 @@
+<!--{"title":"Deployment","lead":"Run the platform server with Docker, Docker Compose or Kubernetes, and how each one assigns machine IDs.","desc":"Docker, Compose and Kubernetes manifests for snowflake-lite."}-->
+<h2>Container image</h2>
+<p>The <code>Dockerfile</code> builds in two stages: a Go 1.23 Alpine builder produces a static, stripped binary, and a minimal Alpine 3.19 image carries only that binary and the <code>web</code> directory. It listens on port 8080 and starts <code>snowflake serve-saas --addr :8080</code>. No image is published; build it yourself:</p>
+<pre><code>docker build -t snowflake-saas .
+docker run --rm -p 8080:8080 -e POD_NAME=snowflake-worker-0 snowflake-saas</code></pre>
+
+<h2 id="machine-ids">Machine IDs</h2>
+<p>The one rule of the library applies here too: every running server needs a distinct machine ID. <code>serve-saas</code> chooses it like this:</p>
+<ol>
+<li>If <code>--machine</code> is non-zero, use it.</li>
+<li>Otherwise take the name from <code>$POD_NAME</code>, or the hostname if that is empty, split it on <code>-</code>, and use the trailing number. <code>snowflake-worker-2</code> becomes machine 2.</li>
+<li>Otherwise the machine ID is 0.</li>
+</ol>
+<div class="callout warn"><strong>Environment variables</strong><p><code>serve-saas</code> does not read <code>MACHINE_ID</code> or <code>DATACENTER_ID</code>, although the Compose file and the Kubernetes ConfigMap set them. In those setups the machine ID works because the pod name ends in the ordinal, and the datacenter stays 0. Pass <code>--machine</code> or <code>--datacenter</code> explicitly if you need other values.</p></div>
+<p>A pod name that does not end in a number gets machine 0, and a number above 1023 stops the server at start-up.</p>
+
+<h2>Docker Compose</h2>
+<p><code>docker-compose.yml</code> runs three workers, named <code>snowflake-worker-0</code> to <code>-2</code>, on host ports 8080 to 8082, each with a <code>/healthz</code> health check and <code>restart: always</code>.</p>
+<pre><code>docker compose up --build
+curl localhost:8081/api/v1/ids/generate</code></pre>
+<p>The workers are independent processes. They do not share keys or rate-limit state.</p>
+
+<h2>Kubernetes</h2>
+<p>The <code>k8s</code> directory holds the manifests:</p>
+<table>
+<tr><th>File</th><th>What it defines</th></tr>
+<tr><td><code>deployment.yaml</code></td><td>A StatefulSet of 3 replicas, a ClusterIP service on port 80, and a headless service. Pods get their name from the downward API; anti-affinity spreads them across nodes; probes use <code>/healthz</code> and <code>/readyz</code>; requests 100m CPU / 64Mi, limits 1 CPU / 256Mi</td></tr>
+<tr><td><code>hpa.yaml</code></td><td>Scales between 3 and 20 replicas at 75% CPU or 80% memory. Scale-up is immediate (up to +100% per 15 s); scale-down waits 5 minutes and removes at most 10% per minute</td></tr>
+<tr><td><code>configmap.yaml</code></td><td><code>DATACENTER_ID</code>, <code>CUSTOM_EPOCH</code>, <code>DEFAULT_RATE_LIMIT</code>, <code>LOG_LEVEL</code>. Only <code>DATACENTER_ID</code> is referenced by the StatefulSet, and the server ignores it (see above)</td></tr>
+<tr><td><code>ingress.yaml</code></td><td>An nginx ingress for <code>id.snowflake-saas.local</code> with 5-10 s timeouts and a 5,000 requests-per-second limit</td></tr>
+<tr><td><code>cluster-autoscaler-config.yaml</code></td><td>Node autoscaler settings</td></tr>
+</table>
+<h3>Why a StatefulSet</h3>
+<p>A StatefulSet gives each pod a stable ordinal name that survives restarts, and the ordinal is the machine ID. A Deployment would give random names and break the scheme. Scaling to 20 replicas uses machine IDs 0 to 19, far below the 1,023 ceiling.</p>
+<pre><code>kubectl apply -f k8s/
+kubectl get pods -l app=snowflake-saas</code></pre>
+<p>The manifest uses the image name <code>snowflake-saas:latest</code> with <code>IfNotPresent</code>; push your build to a registry and change it.</p>
+
+<h2>Checklist</h2>
+<ul>
+<li>Distinct machine ID per instance.</li>
+<li>TLS terminated in front of the server.</li>
+<li>Admin and key-issuance routes blocked at the ingress (see <a href="/docs/security-model/">Security model</a>).</li>
+<li>A reverse proxy that overwrites <code>X-Forwarded-For</code>.</li>
+</ul>

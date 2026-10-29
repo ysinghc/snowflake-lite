@@ -1,0 +1,54 @@
+<!--{"title":"Getting started","lead":"Install the package, mint your first IDs, and choose machine IDs that cannot collide."}-->
+<h2>Install</h2>
+<p>You need Go 1.23 or newer. The library uses only the standard library.</p>
+<pre><code>go get github.com/ysinghc/snowflake-lite@latest</code></pre>
+<p>The importable package is <code>snowflake</code>:</p>
+<pre><code>import "github.com/ysinghc/snowflake-lite/snowflake"</code></pre>
+
+<h2>Generate IDs</h2>
+<pre><code>package main
+
+import (
+	"fmt"
+
+	"github.com/ysinghc/snowflake-lite/snowflake"
+)
+
+func main() {
+	g := snowflake.MustNew(7) // machine ID, 0..1023
+
+	id := g.Next()
+	fmt.Println(id)        // 374208188427300864
+	fmt.Println(id.Time()) // when it was minted, in UTC
+}</code></pre>
+<p>A <code>Generator</code> is safe for concurrent use. Create one per process and share it. Do not create one per request: each generator keeps its own sequence state, and two generators with the same machine ID can produce the same ID.</p>
+
+<h2>Decode an ID</h2>
+<pre><code>p := id.Decode() // or snowflake.Decode(id)
+fmt.Println(p.Timestamp, p.MachineID, p.Sequence)</code></pre>
+<p><code>Parts</code> holds the timestamp, the milliseconds since the epoch, the machine ID and the sequence number.</p>
+
+<h2>Choose machine IDs</h2>
+<p>Uniqueness across processes depends on one rule: <strong>no two running generators share a machine ID.</strong> There are 1,024 values to hand out.</p>
+<table>
+<tr><th>Situation</th><th>What to do</th></tr>
+<tr><td>Single process</td><td><code>snowflake.MustNew(0)</code></td></tr>
+<tr><td>Several services or pods</td><td>Set <code>MACHINE_ID</code> per process and call <code>snowflake.NewFromEnv()</code></td></tr>
+<tr><td>Kubernetes</td><td>Use a StatefulSet and derive the ID from the pod ordinal</td></tr>
+<tr><td>Local development</td><td><code>NewFromEnv()</code> with no variable hashes the hostname</td></tr>
+</table>
+<div class="callout warn"><strong>Warning</strong><p>The hostname fallback hashes to only 10 bits, so two hosts can land on the same value. Treat it as a development convenience and assign IDs explicitly in production.</p></div>
+
+<h2>Send IDs over JSON</h2>
+<p>IDs are larger than 2<sup>53</sup>. A JSON number, or a JavaScript <code>number</code>, silently rounds the low bits. Always send IDs as strings:</p>
+<pre><code>json.Marshal(map[string]string{"id": id.String()})</code></pre>
+
+<h2>Store IDs</h2>
+<p>IDs are positive <code>int64</code> values, so they fit a SQL <code>BIGINT</code> (PostgreSQL <code>bigint</code>, MySQL <code>BIGINT</code>). Because they increase with time, they make good clustered primary keys: new rows append at the end of the index instead of landing at random positions.</p>
+
+<h2>Next steps</h2>
+<ul>
+<li><a href="/docs/concepts/">How it works</a> explains the layout and the algorithm.</li>
+<li><a href="/docs/api/">API reference</a> lists every exported symbol.</li>
+<li><a href="/docs/cli/">Command line</a> generates, benchmarks and decodes IDs without writing code.</li>
+</ul>

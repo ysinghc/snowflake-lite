@@ -1,0 +1,34 @@
+<!--{"title":"FAQ and limits","lead":"Short answers to the questions that come up most, and an honest list of what the library does not do."}-->
+<h2>Questions</h2>
+<h3>Can two machines produce the same ID?</h3>
+<p>Only if they share a machine ID. Give every running generator a distinct value from 0 to 1023 and IDs cannot collide.</p>
+<h3>Are IDs sorted globally?</h3>
+<p>Within one generator, strictly. Across generators, IDs sort by timestamp first, so the order is only as accurate as the machines' clocks. Two machines whose clocks differ by 5 ms can interleave out of real-time order.</p>
+<h3>Why does <code>Next()</code> not return an error?</h3>
+<p>Because nothing can go wrong at call time. A backward clock is absorbed by the sequence, and a full millisecond is absorbed by advancing a logical clock.</p>
+<h3>What if I need more than 1,024 machines?</h3>
+<p>The layout is fixed. For more writers you would need a different bit split, which this package does not offer. The platform's <a href="/docs/formats/#custom">custom format</a> shows one way to change the split.</p>
+<h3>Can I change the epoch?</h3>
+<p>Not in the core package; <code>Epoch</code> is a constant. IDs from this package are only comparable with each other.</p>
+<h3>Is it safe to expose IDs publicly?</h3>
+<p>IDs reveal when they were created and which machine made them. They are identifiers, not secrets, and they are guessable. Do not use them as access tokens.</p>
+<h3>Why a string in JSON?</h3>
+<p>IDs exceed 2<sup>53</sup>, the largest integer a JavaScript number holds exactly.</p>
+
+<h2>Limits at a glance</h2>
+<table>
+<tr><th>Limit</th><th>Value</th></tr>
+<tr><td>Machine IDs</td><td>1,024 (0..1023)</td></tr>
+<tr><td>IDs per millisecond per machine</td><td>4,096</td></tr>
+<tr><td>Timestamp range</td><td>about 69.7 years from 2024 (to roughly 2093)</td></tr>
+<tr><td>State persistence</td><td>none; held in memory</td></tr>
+<tr><td>Cross-machine ordering</td><td>clock accuracy only</td></tr>
+</table>
+
+<h2>What this package does not do</h2>
+<ul>
+<li>It does not coordinate machine IDs. You assign them.</li>
+<li>It does not persist generator state across restarts.</li>
+<li>It does not generate IDs that are hard to guess.</li>
+<li>It does not parse or validate IDs from other Snowflake implementations: the epoch and field widths are specific to this package.</li>
+</ul>

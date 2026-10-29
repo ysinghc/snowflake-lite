@@ -1,0 +1,19 @@
+<!--{"title":"Security","lead":"How to report a vulnerability in snowflake-lite, and what is and is not in scope."}-->
+<h2>Reporting a vulnerability</h2>
+<p>Please report security problems <strong>privately</strong>, not in a public issue. Use GitHub's private reporting:</p>
+<p><a class="btn p" href="https://github.com/ysinghc/snowflake-lite/security/advisories/new">Report a vulnerability</a></p>
+<p>Include the affected version, a description of the problem, and steps or code to reproduce it. You will get an acknowledgement, and we will agree on a fix and disclosure timeline with you. Please give us reasonable time to release a fix before you publish details.</p>
+
+<h2>Supported versions</h2>
+<p>Only the latest release receives fixes. While the project is at version 0.x, upgrade to the newest tag to get them.</p>
+
+<h2>Scope</h2>
+<table>
+<tr><th>Component</th><th>Status</th></tr>
+<tr><td><code>snowflake</code> package</td><td>In scope. Examples: an ID collision under correct use, a panic from valid input, a data race</td></tr>
+<tr><td><code>saas</code> package and <code>serve-saas</code></td><td>In scope, but several weaknesses are already documented as <a href="/docs/security-model/#known-limitations">known limitations</a> of a reference implementation. Reports of new problems are welcome</td></tr>
+<tr><td>This website</td><td>In scope</td></tr>
+</table>
+
+<h2>What IDs are not</h2>
+<p>Snowflake IDs are predictable by design: they encode a time, a machine and a counter. Guessing the next ID is not a vulnerability. Do not use them as secrets, session tokens or access control.</p>

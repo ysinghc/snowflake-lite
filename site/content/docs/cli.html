@@ -1,0 +1,47 @@
+<!--{"title":"Command line","lead":"The snowflake command generates, benchmarks and decodes IDs, and starts the two HTTP servers."}-->
+<h2>Install</h2>
+<pre><code>go install github.com/ysinghc/snowflake-lite/cmd/snowflake@latest</code></pre>
+<p>Or build from a checkout: <code>go build -o snowflake ./cmd/snowflake</code>.</p>
+
+<h2>Commands</h2>
+<table>
+<tr><th>Command</th><th>What it does</th></tr>
+<tr><td><code>snowflake generate [N]</code></td><td>Print <code>N</code> IDs, one per line. Default 1,000,000</td></tr>
+<tr><td><code>snowflake bench [N]</code></td><td>Measure throughput and check that IDs are strictly ascending</td></tr>
+<tr><td><code>snowflake decode &lt;ID&gt;</code></td><td>Split an ID into timestamp, machine and sequence, with a bit view</td></tr>
+<tr><td><code>snowflake serve</code></td><td>A tiny JSON server. See <a href="/docs/http-server/">Simple HTTP server</a></td></tr>
+<tr><td><code>snowflake serve-saas</code></td><td>The multi-format platform. See <a href="/docs/platform-api/">Platform API</a></td></tr>
+</table>
+<p>Counts accept underscores for readability: <code>snowflake generate 1_000_000</code>.</p>
+
+<h2>Flags</h2>
+<table>
+<tr><th>Flag</th><th>Applies to</th><th>Meaning</th></tr>
+<tr><td><code>--machine ID</code></td><td>generate, bench, serve, serve-saas</td><td>Machine ID 0..1023. For the first four the default is <code>$MACHINE_ID</code>, then a hostname hash. For <code>serve-saas</code> the default is 0, then the pod ordinal (see <a href="/docs/deployment/#machine-ids">Deployment</a>)</td></tr>
+<tr><td><code>--addr ADDR</code></td><td>serve, serve-saas</td><td>Listen address. Default <code>:8080</code></td></tr>
+<tr><td><code>--datacenter ID</code></td><td>serve-saas</td><td>Datacenter ID 0..31</td></tr>
+<tr><td><code>--web DIR</code></td><td>serve-saas</td><td>Directory of static dashboard files. Default <code>web</code></td></tr>
+</table>
+<div class="callout"><strong>Flag order</strong><p>Put flags before the count: <code>snowflake generate --machine 3 1000</code>. Go's flag parser stops at the first positional argument.</p></div>
+
+<h2>Examples</h2>
+<h3>Generate a million IDs</h3>
+<pre><code>$ time ./snowflake generate 1000000 &gt; /dev/null</code></pre>
+<p>Output goes through a 1 MiB buffered writer so the timing reflects generation, not system calls.</p>
+<h3>Benchmark</h3>
+<pre><code>$ ./snowflake bench 5000000
+generated : 5,000,000 IDs
+elapsed   : …
+rate      : … IDs/sec
+sortable  : true  (strictly ascending ⇒ also collision-free)
+machine   : 7
+last ID   : …</code></pre>
+<p>A strictly ascending sequence cannot contain duplicates, so one check proves both ordering and uniqueness.</p>
+<h3>Decode</h3>
+<pre><code>$ ./snowflake decode 374208188427300864
+ID        : 374208188427300864
+timestamp : 2024-…  (… ms since 2024-01-01)
+machine   : 7
+sequence  : 0
+bits      : 0 &lt;41 bits&gt; &lt;10 bits&gt; &lt;12 bits&gt;</code></pre>
+<p>Invalid input exits with status 1 and prints <code>error: …</code> to standard error. Running with no command prints usage and exits with status 2.</p>

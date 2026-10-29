@@ -1,0 +1,60 @@
+<!--{"title":"How it works","lead":"The bit layout, the single compare-and-swap algorithm, and exactly what happens when the clock misbehaves."}-->
+<h2>The ID layout</h2>
+<p>Every ID is a 64-bit integer split into four fields. The top bit is always zero, so the value is a positive <code>int64</code>.</p>
+<div class="bits"><span class="seg u" title="bit 63, unused">0</span><span class="seg t"><small>bits 62..22</small>timestamp, 41 bits</span><span class="seg m"><small>21..12</small>machine</span><span class="seg s"><small>11..0</small>sequence</span></div>
+<table>
+<tr><th>Field</th><th>Bits</th><th>Range</th><th>Meaning</th></tr>
+<tr><td>Timestamp</td><td>41</td><td>0 .. 2<sup>41</sup>−1</td><td>Milliseconds since <code>2024-01-01T00:00:00Z</code></td></tr>
+<tr><td>Machine</td><td>10</td><td>0 .. 1023</td><td>Which generator minted the ID</td></tr>
+<tr><td>Sequence</td><td>12</td><td>0 .. 4095</td><td>Counter within one millisecond</td></tr>
+</table>
+<p>Three limits follow directly:</p>
+<ul>
+<li><strong>Lifetime.</strong> 2<sup>41</sup> ms is about 69.7 years, so IDs run out of timestamp space around 2093. The custom 2024 epoch is what buys this headroom; a 1970 epoch would already have used 55 years.</li>
+<li><strong>Machines.</strong> At most 1,024 generators can run at once without sharing an ID.</li>
+<li><strong>Rate.</strong> One machine can mint 4,096 IDs per millisecond, about 4.1 million per second, before it starts borrowing time from the future (see below).</li>
+</ul>
+
+<h2>Why lock-free</h2>
+<p>The textbook Snowflake guards its state with a mutex, and sleeps or returns an error when the wall clock moves backward. snowflake-lite avoids both. It keeps the only mutable state, the pair <code>(timestamp, sequence)</code>, in a single <code>atomic.Uint64</code>:</p>
+<pre><code>state = timestamp &lt;&lt; 12 | sequence     // 41 + 12 = 53 bits, fits a uint64</code></pre>
+<p>Generating an ID is then a read, a computation, and one <code>CompareAndSwap</code>. If another goroutine changed the state in between, the swap fails and the loop retries with the new value.</p>
+
+<h2>The algorithm, step by step</h2>
+<p>Inside <code>Generator.Next</code>:</p>
+<ol>
+<li><strong>Load</strong> the packed state and split it into <code>lastTS</code> and <code>lastSeq</code>.</li>
+<li><strong>Read the clock</strong> and convert it to milliseconds since the epoch (<code>now</code>).</li>
+<li><strong>Choose the next pair</strong> with one branch:
+<ul>
+<li>If <code>now &gt; lastTS</code>, a new millisecond has begun: use <code>(now, 0)</code>.</li>
+<li>Otherwise this is the same millisecond, or the clock went backward: keep <code>lastTS</code> and use <code>lastSeq + 1</code>.</li>
+<li>If that sequence would exceed 4095, tick the logical clock forward: use <code>(lastTS + 1, 0)</code>.</li>
+</ul></li>
+<li><strong>Compare-and-swap</strong> the old state for the new one. On failure, go back to step 1.</li>
+<li><strong>Assemble</strong> the ID: <code>timestamp&lt;&lt;22 | machine&lt;&lt;12 | sequence</code>.</li>
+</ol>
+<div class="flow"><div><b>Load state</b><small>lastTS, lastSeq</small></div><i>→</i><div><b>Read clock</b><small>ms since epoch</small></div><i>→</i><div><b>Pick (ts, seq)</b><small>one branch</small></div><i>→</i><div><b>CAS</b><small>retry on conflict</small></div><i>→</i><div><b>Pack ID</b><small>ts | machine | seq</small></div></div>
+
+<h2>When the clock moves backward</h2>
+<p>NTP corrections and VM migrations can make the wall clock jump back. The branch in step 3 handles it without a special case: the generator never lets its timestamp go below <code>lastTS</code>. It holds the old timestamp and keeps incrementing the sequence. IDs stay unique and strictly ascending; they simply carry a timestamp that is slightly stale until the clock catches up.</p>
+<p>If the clock is wrong for long enough to use up 4,096 sequence numbers, the logical clock advances one millisecond at a time, as described next.</p>
+
+<h2>When a millisecond fills up</h2>
+<p>If more than 4,096 IDs are requested in one millisecond, the generator does not block. It moves its logical timestamp one millisecond ahead of the wall clock and restarts the sequence. IDs remain strictly ascending. Under a sustained load above about 4.1 million IDs per second, the logical clock leads the wall clock by a growing margin, and decoded timestamps run slightly ahead of real time.</p>
+
+<h2>What is guaranteed</h2>
+<table>
+<tr><th>Property</th><th>Holds when</th></tr>
+<tr><td>Unique within a generator</td><td>Always</td></tr>
+<tr><td>Strictly ascending within a generator</td><td>Always, including across clock rollback</td></tr>
+<tr><td>Unique across generators</td><td>Machine IDs are distinct</td></tr>
+<tr><td>Sorted across generators</td><td>Only as far as their clocks agree</td></tr>
+<tr><td>Unique across restarts</td><td>The wall clock has not gone back past the previous run's last timestamp</td></tr>
+</table>
+<div class="callout"><strong>Note</strong><p>State lives in memory. A restart forgets the logical clock. If a process dies while leading the wall clock and restarts on the same machine ID before real time catches up, it could reuse timestamps. This is rare in practice, but if you need a hard guarantee, persist or reserve a time window per machine.</p></div>
+
+<h2>Performance and contention</h2>
+<p>A single goroutine mints an ID in about 48 ns with no allocations (AMD Ryzen 7 7735HS). Under heavy contention from many goroutines on <em>one</em> generator, the compare-and-swap loop retries and can lose to a plain mutex in the repository's own benchmark. The benchmarks live in <code>snowflake/snowflake_test.go</code> and run on your hardware with:</p>
+<pre><code>go test -bench . ./snowflake</code></pre>
+<p>If you need maximum throughput on many cores, give independent goroutine groups their own generator with a distinct machine ID.</p>

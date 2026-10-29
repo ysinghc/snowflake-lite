@@ -1,0 +1,36 @@
+<!--{"title":"Community","lead":"snowflake-lite is open source under the MIT license. Bug reports, questions, documentation fixes and code are all welcome."}-->
+<h2>Get help</h2>
+<table>
+<tr><th>You want to</th><th>Go to</th></tr>
+<tr><td>Ask a question or report a bug</td><td><a href="https://github.com/ysinghc/snowflake-lite/issues/new">Open an issue</a></td></tr>
+<tr><td>Read the docs</td><td><a href="/docs/getting-started/">Documentation</a> and the <a href="/docs/faq/">FAQ</a></td></tr>
+<tr><td>Find a function</td><td>The <a href="/docs/code-map/">code map</a></td></tr>
+<tr><td>Report a security problem</td><td><a href="/security/">Security</a>, privately</td></tr>
+</table>
+<p>A good bug report says which version you run (<code>go list -m github.com/ysinghc/snowflake-lite</code>), what you did, what you expected, and what happened. A minimal program is best.</p>
+
+<h2>Contribute</h2>
+<ol>
+<li>Fork the repository and create a branch.</li>
+<li>Make a focused change. Match the style of the surrounding code.</li>
+<li>Run <code>go vet ./...</code> and <code>go test -race ./...</code>. Add a test for any behavior change.</li>
+<li>Open a pull request that explains what changed and why.</li>
+</ol>
+<p>For anything larger than a small fix, open an issue first so we can agree on the approach before you invest time. The full guide is <a href="https://github.com/ysinghc/snowflake-lite/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
+
+<h3>Good first contributions</h3>
+<ul>
+<li>Documentation fixes. Every docs page has an “Edit this page” link.</li>
+<li>Platform hardening from the <a href="/docs/security-model/#known-limitations">known limitations</a> list, such as authenticating the admin routes.</li>
+<li>Making <code>serve-saas</code> read <code>MACHINE_ID</code> and <code>DATACENTER_ID</code>, as the Compose file and ConfigMap already assume.</li>
+<li>Clients for other languages that call the platform API.</li>
+</ul>
+
+<h2>How decisions are made</h2>
+<p>The project is maintained by Yuvraj Singh Chauhan. Decisions happen in the open, in issues and pull requests. A change is merged when it has a clear rationale, passes CI, and keeps the core package small, dependency-free and lock-free. The core ID layout is a compatibility promise: changing it would invalidate existing IDs, so it only changes in a new major version.</p>
+
+<h2>Code of conduct</h2>
+<p>Be respectful and assume good faith. Harassment and personal attacks are not accepted. Maintainers may edit or remove comments and contributions that break these rules. The full text is in <a href="https://github.com/ysinghc/snowflake-lite/blob/main/CODE_OF_CONDUCT.md">CODE_OF_CONDUCT.md</a>.</p>
+
+<h2>License</h2>
+<p>Released under the <a href="https://github.com/ysinghc/snowflake-lite/blob/main/LICENSE">MIT License</a>. By contributing, you agree your contribution is licensed the same way.</p>

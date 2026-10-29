@@ -6,7 +6,7 @@
 
 A small Go library that generates 64-bit, time-sortable unique IDs without any central coordination. It is a lock-free take on Twitter's Snowflake: no mutex, no sleeping, and no error return, even when the system clock moves backward.
 
-**Live demo and docs:** https://snowflake.ysinghc.in (the demo runs this package compiled to WebAssembly)
+**Documentation, live demo and code map:** https://snowflake.ysinghc.in
 
 ## Install
 

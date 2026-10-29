@@ -1,0 +1,57 @@
+<!--{"scripts":["/wasm_exec.js","/playground.js"],"desc":"Lock-free, time-sortable 64-bit unique IDs for Go. One atomic compare-and-swap per ID, no mutex, no errors on clock rollback."}-->
+<main id="content">
+<section class="wrap hero">
+<h1>Unique IDs that sort by time.</h1>
+<p class="lead">snowflake-lite is a small Go library that mints 64-bit, time-ordered, collision-free IDs with no coordination between machines. One atomic compare-and-swap per ID: no mutex, no sleeping, no error when the clock steps back.</p>
+<div class="cta"><a class="btn p" href="/docs/getting-started/">Get started</a><a class="btn" href="/docs/concepts/">How it works</a><a class="btn" href="/docs/code-map/">Browse the code map</a></div>
+<div class="install"><pre data-nocopy><code>go get github.com/ysinghc/snowflake-lite@<span data-rel="tag">latest</span></code></pre></div>
+<div class="stats">
+<div><b>~48 ns</b><span>per ID, one goroutine (Ryzen 7 laptop)</span></div>
+<div><b>4,096</b><span>IDs per ms per machine</span></div>
+<div><b>1,024</b><span>machines, no coordinator</span></div>
+<div><b>0</b><span>dependencies beyond the stdlib</span></div>
+</div>
+</section>
+
+<section class="wrap section">
+<h2>Why this one</h2>
+<div class="cards">
+<div class="card"><h3>Lock-free</h3><p>The whole generator state is one atomic word. Each ID costs a single <code>CompareAndSwap</code>.</p></div>
+<div class="card"><h3>Never fails</h3><p>A backward clock step cannot break uniqueness or ordering. <code>Next()</code> has no error return.</p></div>
+<div class="card"><h3>Sortable</h3><p>IDs from one generator are strictly ascending. They are positive <code>int64</code> values that fit a SQL <code>BIGINT</code>.</p></div>
+</div>
+</section>
+
+<section class="wrap section">
+<h2>Try it in your browser</h2>
+<p class="mute">This runs the real Go package, compiled to WebAssembly. <span id="status">Loading…</span></p>
+<div id="play" class="play">
+<div class="row"><label>Machine ID <input id="machine" type="number" min="0" max="1023" value="7"></label>
+<button data-n="1">Generate 1</button><button data-n="10">10</button><button data-n="100">100</button></div>
+<ol id="ids"></ol>
+<div id="decoded"></div>
+<div class="row"><input id="decode-in" placeholder="Paste an ID to decode" inputmode="numeric" aria-label="ID to decode"><button id="decode-btn">Decode</button></div>
+<div class="row"><button id="bench">Benchmark 1M IDs</button><span id="bench-out" class="mute"></span></div>
+</div>
+</section>
+
+<section class="wrap section">
+<h2>Use it</h2>
+<pre><code>import "github.com/ysinghc/snowflake-lite/snowflake"
+
+g := snowflake.MustNew(7) // machine ID 0..1023
+id := g.Next()            // strictly ascending, safe for concurrent use
+fmt.Println(id, id.Time())</code></pre>
+<div class="bits" aria-label="ID layout"><span class="seg u" title="unused sign bit">0</span><span class="seg t">41-bit timestamp</span><span class="seg m">10 machine</span><span class="seg s">12 seq</span></div>
+</section>
+
+<section class="wrap section">
+<h2>Where to go next</h2>
+<div class="cards">
+<a class="card" href="/docs/getting-started/"><h3>Getting started</h3><p>Install, generate, decode, and pick machine IDs.</p></a>
+<a class="card" href="/docs/concepts/"><h3>How it works</h3><p>The bit layout and the single-CAS algorithm, step by step.</p></a>
+<a class="card" href="/docs/platform-api/"><h3>The platform</h3><p>An HTTP service with ULID, UUIDv7, API keys and rate limits.</p></a>
+<a class="card" href="/docs/code-map/"><h3>Code map</h3><p>Every function, with its callers and callees, generated from source.</p></a>
+</div>
+</section>
+</main>
