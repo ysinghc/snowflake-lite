@@ -12,8 +12,6 @@ const out = path.join(root, "public");
 const DOCS = [
   ["Start", [["getting-started", "Getting started"], ["concepts", "How it works"]]],
   ["Library", [["api", "API reference"], ["faq", "FAQ and limits"]]],
-  ["Tools", [["cli", "Command line"], ["http-server", "Simple HTTP server"]]],
-  ["Platform", [["formats", "ID formats"], ["platform-api", "Platform API"], ["security-model", "Security model"], ["deployment", "Deployment"]]],
   ["Internals", [["architecture", "Architecture"], ["code-map", "Code map"]]],
 ];
 const flat = DOCS.flatMap(([, items]) => items);

@@ -23,7 +23,7 @@ import (
 const module = "github.com/ysinghc/snowflake-lite"
 
 // Dirs holds the packages to map, as module-relative directories.
-var dirs = []string{"snowflake", "saas", "cmd/snowflake", "wasm"}
+var dirs = []string{"snowflake", "wasm"}
 
 type Func struct {
 	ID       string   `json:"id"`

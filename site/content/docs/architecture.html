@@ -1,59 +1,38 @@
-<!--{"title":"Architecture","lead":"How the repository is organized, how the pieces depend on each other, and how a request travels through the platform."}-->
+<!--{"title":"Architecture","lead":"How the repository is organized and how its few moving parts fit together."}-->
 <h2>Repository layout</h2>
 <pre class="tree" data-nocopy><code>snowflake-lite/
-├── snowflake/          the core library (the package you import)
-├── saas/               multi-format ID engine, security, metrics, HTTP server
-├── cmd/snowflake/      the command-line program (uses both packages)
-├── wasm/               js/wasm bindings: the core library in the browser
-├── web/                the platform dashboard (static HTML, CSS, JS)
-├── k8s/                Kubernetes manifests
+├── snowflake/          the library (the package you import)
+├── wasm/               js/wasm bindings: the library in the browser
 ├── site/               this website and its Cloudflare Worker
-├── Dockerfile  docker-compose.yml
 └── .github/workflows/  CI, release and site deployment</code></pre>
-<p>The project is one Go module, <code>github.com/ysinghc/snowflake-lite</code>, with no third-party dependencies.</p>
+<p>The project is one Go module, <code>github.com/ysinghc/snowflake-lite</code>, with no third-party dependencies. Only the <code>snowflake</code> package is meant to be imported.</p>
 
-<h2>Dependencies between packages</h2>
-<div class="flow"><div><b>cmd/snowflake</b><small>CLI and servers</small></div><i>→</i><div><b>saas</b><small>engine, security, metrics, server</small></div><i>→</i><div><b>snowflake</b><small>core generator</small></div></div>
-<p>The arrows point from user to dependency. <code>wasm</code> and <code>cmd/snowflake</code> depend on <code>snowflake</code> directly; nothing depends on <code>cmd</code> or <code>wasm</code>. The core package imports only the standard library and knows nothing about HTTP, so it stays small enough to read in one sitting.</p>
-
-<h2>The core package</h2>
-<p>A single file, <code>snowflake/snowflake.go</code>, with about 215 lines. It defines the layout constants, the <code>ID</code> and <code>Parts</code> types, the constructors, and <code>Generator.Next</code>. A compile-time check, <code>var _ = [1]struct{}{}[63-(timestampBits+machineBits+sequenceBits)]</code>, fails the build if the three field widths ever stop summing to 63. The clock is a function field, <code>now</code>, so tests can simulate skew without sleeping.</p>
-
-<h2>The platform package</h2>
-<table>
-<tr><th>File</th><th>Responsibility</th></tr>
-<tr><td><code>engine.go</code></td><td><code>MultiEngine</code>: generates and decodes the five formats</td></tr>
-<tr><td><code>security.go</code></td><td><code>SecurityManager</code>: keys, token buckets, blocklist, audit log</td></tr>
-<tr><td><code>metrics.go</code></td><td><code>MetricsCollector</code>: counters, percentiles, node list</td></tr>
-<tr><td><code>server.go</code></td><td><code>Server</code>: routes, middleware and handlers that tie the three together</td></tr>
-</table>
-<p>A <code>Server</code> owns one of each. Handlers never touch the maps inside the managers; they call methods, and the managers lock for themselves.</p>
-
-<h3>Life of a generate request</h3>
-<div class="flow"><div><b>securityHeadersMiddleware</b><small>CORS and headers; answers OPTIONS</small></div><i>→</i><div><b>withSecurity</b><small>blocklist, key, limit</small></div><i>→</i><div><b>handleGenerateID</b><small>parse parameters</small></div><i>→</i><div><b>MultiEngine.Generate</b><small>pick the format</small></div><i>→</i><div><b>RecordGeneration</b><small>metrics, then JSON</small></div></div>
-<p>The <a href="/docs/code-map/">code map</a> lets you open any of these functions and see exactly what it calls and what calls it.</p>
-
-<h2>Concurrency model</h2>
-<table>
-<tr><th>State</th><th>Protection</th></tr>
-<tr><td>Snowflake and custom generators</td><td>One atomic word each, compare-and-swap</td></tr>
-<tr><td>ULID last timestamp and random bytes</td><td>A mutex (<code>ulidMu</code>)</td></tr>
-<tr><td>Security maps and audit log</td><td>One <code>RWMutex</code> in <code>SecurityManager</code></td></tr>
-<tr><td>Per-second counters, latency samples, nodes</td><td>An <code>RWMutex</code> in <code>MetricsCollector</code>; the grand total is an atomic</td></tr>
-</table>
+<h2>The library</h2>
+<p>A single file, <code>snowflake/snowflake.go</code>, of about 215 lines. It defines the layout constants, the <code>ID</code> and <code>Parts</code> types, the constructors, and <code>Generator.Next</code>. It imports only the standard library and knows nothing about HTTP, so it is small enough to read in one sitting. Two details are worth knowing:</p>
+<ul>
+<li>A compile-time check, <code>var _ = [1]struct{}{}[63-(timestampBits+machineBits+sequenceBits)]</code>, fails the build if the three field widths ever stop summing to 63.</li>
+<li>The clock is a function field, <code>now</code>, so tests can simulate skew without sleeping.</li>
+</ul>
+<p>Concurrency is handled by one atomic word per generator. See <a href="/docs/concepts/">How it works</a> for the algorithm, and the <a href="/docs/code-map/">code map</a> for every function and its callers.</p>
 
 <h2>The browser build</h2>
-<p><code>wasm/main.go</code> compiles to WebAssembly with <code>GOOS=js GOARCH=wasm</code> and registers five global functions: <code>snowNew(machine)</code>, <code>snowNext()</code>, <code>snowNextBatch(n)</code> (up to 200,000), <code>snowBench(n)</code> and <code>snowDecode(idString)</code>. It calls <code>onSnowReady</code> when they are bound. IDs cross the boundary as strings because of the 2<sup>53</sup> limit. A native stub, <code>wasm/stub.go</code>, lets <code>go build ./...</code> succeed on a normal machine. The demo on the home page is this build.</p>
+<p><code>wasm/main.go</code> compiles to WebAssembly with <code>GOOS=js GOARCH=wasm</code> and registers five global functions: <code>snowNew(machine)</code>, <code>snowNext()</code>, <code>snowNextBatch(n)</code> (up to 200,000), <code>snowBench(n)</code> and <code>snowDecode(idString)</code>. It calls <code>onSnowReady</code> when they are bound. IDs cross the boundary as strings because of the 2<sup>53</sup> limit. A native stub, <code>wasm/stub.go</code>, lets <code>go build ./...</code> succeed on a normal machine. The playground on the home page is this build.</p>
+
+<h2>The website</h2>
+<p><code>site/build.sh</code> produces everything the site serves that comes from the Go source:</p>
+<table>
+<tr><th>Step</th><th>Output</th></tr>
+<tr><td>Compile <code>wasm/</code></td><td><code>snowflake.wasm</code> for the playground</td></tr>
+<tr><td>Run <code>site/tools/funcmap</code></td><td><code>funcmap.json</code>, the call graph behind the code map</td></tr>
+<tr><td>Run <code>site/build-pages.mjs</code></td><td>HTML pages assembled from <code>site/content/</code></td></tr>
+</table>
+<p>A Cloudflare Worker (<code>site/src/worker.js</code>) serves these files and fills in the latest release version from the repository's public release feed, cached for five minutes. Tagging a release therefore updates the site without a redeploy.</p>
 
 <h2>Testing</h2>
 <table>
-<tr><th>Where</th><th>What it proves</th></tr>
+<tr><th>File</th><th>What it proves</th></tr>
 <tr><td><code>snowflake_test.go</code></td><td>Uniqueness under concurrency, strict monotonic order, backward-clock behavior, sequence overflow ticking the clock, decode round trips, wall-clock accuracy, machine ID bounds; benchmarks for the lock-free generator and a mutex baseline</td></tr>
 <tr><td><code>example_test.go</code></td><td>Runnable examples shown on pkg.go.dev</td></tr>
-<tr><td><code>saas/engine_test.go</code></td><td>Generation, batches and decoding across formats</td></tr>
-<tr><td><code>saas/security_test.go</code></td><td>Key validation, rate limiting, blocklist</td></tr>
-<tr><td><code>saas/integration_test.go</code></td><td>The whole server over HTTP, a high-concurrency zero-collision run, and rate-limit enforcement</td></tr>
-<tr><td><code>web/verify_wasm.mjs</code></td><td>Loads the compiled <code>.wasm</code> in Node and checks its behavior</td></tr>
 </table>
 <pre><code>go vet ./...
 go test -race ./...</code></pre>

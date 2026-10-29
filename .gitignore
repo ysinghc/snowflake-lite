@@ -1,5 +1,3 @@
-/snowflake-saas-server
-/snowflake/snowflake
 node_modules/
 .wrangler/
 /site/public/snowflake.wasm

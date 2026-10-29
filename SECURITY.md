@@ -12,6 +12,6 @@ Only the latest release receives fixes.
 
 ## Scope
 
-The `snowflake` package, the `saas` package and `serve-saas`, and the project website are in scope. Several weaknesses of the `saas` reference implementation are already documented at <https://snowflake.ysinghc.in/docs/security-model/>.
+The `snowflake` package and the project website are in scope.
 
 Snowflake IDs are predictable by design; guessing the next ID is not a vulnerability.

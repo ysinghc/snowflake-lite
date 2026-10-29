@@ -11,4 +11,5 @@ for f in "$root/lib/wasm/wasm_exec.js" "$root/misc/wasm/wasm_exec.js"; do
   if [ -f "$f" ]; then cp "$f" site/public/wasm_exec.js; break; fi
 done
 [ -f site/public/wasm_exec.js ] || { echo "wasm_exec.js not found under $root" >&2; exit 1; }
+rm -rf site/public/docs site/public/download site/public/community site/public/security
 node site/build-pages.mjs

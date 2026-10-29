@@ -1,12 +1,12 @@
 //go:build js && wasm
 
 // Command wasm exposes the Snowflake generator to JavaScript. The *same*
-// snowflake package that powers the native CLI is compiled to WebAssembly here,
+// snowflake package that powers every Go caller is compiled to WebAssembly here,
 // so the browser demo runs the real algorithm — no server, no reimplementation.
 //
 // Build:
 //
-//	GOOS=js GOARCH=wasm go build -o web/snowflake.wasm ./wasm
+//	GOOS=js GOARCH=wasm go build -o site/public/snowflake.wasm ./wasm
 package main
 
 import (

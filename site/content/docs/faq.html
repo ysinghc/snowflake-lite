@@ -7,7 +7,7 @@
 <h3>Why does <code>Next()</code> not return an error?</h3>
 <p>Because nothing can go wrong at call time. A backward clock is absorbed by the sequence, and a full millisecond is absorbed by advancing a logical clock.</p>
 <h3>What if I need more than 1,024 machines?</h3>
-<p>The layout is fixed. For more writers you would need a different bit split, which this package does not offer. The platform's <a href="/docs/formats/#custom">custom format</a> shows one way to change the split.</p>
+<p>The layout is fixed. For more writers you would need a different bit split, which this package does not offer.</p>
 <h3>Can I change the epoch?</h3>
 <p>Not in the core package; <code>Epoch</code> is a constant. IDs from this package are only comparable with each other.</p>
 <h3>Is it safe to expose IDs publicly?</h3>

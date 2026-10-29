@@ -34,7 +34,7 @@ fmt.Println(p.Timestamp, p.MachineID, p.Sequence)</code></pre>
 <tr><th>Situation</th><th>What to do</th></tr>
 <tr><td>Single process</td><td><code>snowflake.MustNew(0)</code></td></tr>
 <tr><td>Several services or pods</td><td>Set <code>MACHINE_ID</code> per process and call <code>snowflake.NewFromEnv()</code></td></tr>
-<tr><td>Kubernetes</td><td>Use a StatefulSet and derive the ID from the pod ordinal</td></tr>
+<tr><td>Kubernetes</td><td>Use a StatefulSet and derive the ID from the pod ordinal (the number at the end of the pod name)</td></tr>
 <tr><td>Local development</td><td><code>NewFromEnv()</code> with no variable hashes the hostname</td></tr>
 </table>
 <div class="callout warn"><strong>Warning</strong><p>The hostname fallback hashes to only 10 bits, so two hosts can land on the same value. Treat it as a development convenience and assign IDs explicitly in production.</p></div>
@@ -50,5 +50,6 @@ fmt.Println(p.Timestamp, p.MachineID, p.Sequence)</code></pre>
 <ul>
 <li><a href="/docs/concepts/">How it works</a> explains the layout and the algorithm.</li>
 <li><a href="/docs/api/">API reference</a> lists every exported symbol.</li>
-<li><a href="/docs/cli/">Command line</a> generates, benchmarks and decodes IDs without writing code.</li>
+<li><a href="/docs/faq/">FAQ and limits</a> lists what the library does and does not guarantee.</li>
+<li>The <a href="/docs/code-map/">code map</a> shows every function and how they connect.</li>
 </ul>
