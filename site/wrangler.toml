@@ -6,5 +6,5 @@ compatibility_date = "2026-10-01"
 GITHUB_REPO = "ysinghc/snowflake-lite"
 
 [[routes]]
-pattern = "snowflake.ysinghc.ion"
+pattern = "snowflake.ysinghc.in"
 custom_domain = true

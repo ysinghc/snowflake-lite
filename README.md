@@ -2,7 +2,7 @@
 
 Lock-free, time-sortable 64-bit unique IDs for Go. A single `CompareAndSwap` per ID, no mutex, no sleeping, no errors on clock rollback.
 
-Site: https://snowflake.ysinghc.ion
+Site: https://snowflake.ysinghc.in
 
 ```sh
 go get github.com/ysinghc/snowflake-lite@latest
